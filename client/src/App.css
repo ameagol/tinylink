@@ -1,0 +1,50 @@
+.app {
+  padding: 20px;
+}
+.url-input {
+  min-width: 300px;
+  padding: 12px 15px;
+  border: 2px solid #61dafb;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.shorten-button {
+  padding: 12px 25px;
+  background-color: #61dafb;
+  color: #282c34;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.shorten-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.short-url-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.copy-button {
+  background: none;
+  border: 1px solid #61dafb;
+  color: #61dafb;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.error-message {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-top: 15px;
+}
