@@ -4,8 +4,8 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"  # Express API
-      - "3001:3001"  # React Frontend
+      - "3000:3000"  # Backend API (Node)
+      - "3001:3001"  # Frontend React
     environment:
       - REDIS_URL=redis://redis:6379
     depends_on:

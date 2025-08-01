@@ -1,0 +1,69 @@
+.DS_Store
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# React
+/client/node_modules/
+/client/.env
+/client/.eslintcache
+/client/build/
+/client/coverage/
+/client/.DS_Store
+
+# Redis
+dump.rdb
+appendonly.aof
+redis-data/
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Testing
+/junit.xml
+/nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
+*.pem
+*.cache
+.vercel/
+.next/
+out/
+.cache/
+.temp/
+*.tmp
+*.bak
+*.backup
