@@ -101,4 +101,8 @@ async function gracefulShutdown() {
   process.exit(0);
 }
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+export { app, redis };
