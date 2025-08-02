@@ -42,10 +42,11 @@ export async function shortenUrl(url: string, customSlug?: string): Promise<stri
   try {
     // Use custom slug if provided
     if (customSlug) {
-      const exists = await redis.exists(customSlug);
-      if (exists) {
-        throw new Error('Custom slug already exists');
+      if (!/^[a-zA-Z0-9]{1,8}$/.test(customSlug)) {
+        throw new Error('Custom slug must be 1-8 letters or digits only');
       }
+      const exists = await redis.exists(customSlug);
+      if (exists) throw new Error('Custom slug already exists');
       await redis.set(customSlug, url);
       return customSlug;
     }

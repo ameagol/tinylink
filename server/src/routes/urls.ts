@@ -6,16 +6,17 @@ const router = express.Router();
 // Shorten URL
 router.post('/', async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, customSlug } = req.body;
     if (!url) return res.status(400).json({ error: 'URL is required' });
-    
-    const slug = await shortenUrl(url);
-    res.json({ 
-      shortUrl: `${req.headers.host}/${slug}`,
-      originalUrl: url 
-    });
+
+    if (customSlug && !/^[a-zA-Z0-9]{1,8}$/.test(customSlug)) {
+      return res.status(400).json({ error: 'Custom slug must be 1-8 letters or digits only' });
+    }
+
+    const slug = await shortenUrl(url, customSlug);
+    res.json({ slug, originalUrl: url });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to shorten URL' });
+    res.status(500).json({ error: (err as Error).message });
   }
 });
 

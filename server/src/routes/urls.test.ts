@@ -19,12 +19,45 @@ jest.mock('../services/redis.service', () => ({
   
     it('should shorten a URL on POST /api/urls', async () => {
       shortenUrlMock.mockResolvedValue('slug321');
-  
-      const res = await request(app).post('/api/urls').send({ url: 'https://mockurl.com' });
-  
+    
+      const res = await request(app)
+        .post('/api/urls')
+        .send({ url: 'https://mockurl.com' });
+    
       expect(res.status).toBe(200);
-      expect(res.body.shortUrl).toMatch(/slug321/);
-      expect(res.body.originalUrl).toBe('https://mockurl.com');
+      expect(shortenUrlMock).toHaveBeenCalledWith('https://mockurl.com', undefined);
+      expect(res.body).toEqual({
+        slug: 'slug321',
+        originalUrl: 'https://mockurl.com'
+      });
+    });
+
+    it('should accept a custom slug and store it if available', async () => {
+      shortenUrlMock.mockResolvedValue('custom12');
+    
+      const res = await request(app)
+        .post('/api/urls')
+        .send({ url: 'https://mockurl.com', customSlug: 'custom12' });
+    
+      expect(res.status).toBe(200);
+      expect(shortenUrlMock).toHaveBeenCalledWith('https://mockurl.com', 'custom12');
+      expect(res.body).toEqual({
+        slug: 'custom12',
+        originalUrl: 'https://mockurl.com'
+      });
+    });
+
+    it('should return 500 if custom slug already exists', async () => {
+      shortenUrlMock.mockImplementation(() => {
+        throw new Error('Custom slug already exists');
+      });
+    
+      const res = await request(app)
+        .post('/api/urls')
+        .send({ url: 'https://mockurl.com', customSlug: 'dupSlug1' });
+    
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Custom slug already exists');
     });
   
     it('should return 400 if no URL is provided', async () => {
