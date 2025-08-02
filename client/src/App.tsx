@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 
+interface UrlItem {
+  slug: string;
+  url: string;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -8,15 +13,19 @@ function App() {
   const [url, setUrl] = useState('');
   const [slug, setSlug] = useState('');
   const [shortUrl, setShortUrl] = useState('');
+  const [urls, setUrls] = useState<UrlItem[]>([]); // <-- new state
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const res = await fetch('/api/auth/status', {
-          credentials: 'include'
+          credentials: 'include',
         });
         const data = await res.json();
         setIsLoggedIn(data.authenticated);
+        if (data.authenticated) {
+          fetchUrls();  // fetch URLs if logged in on mount
+        }
       } catch (err) {
         console.error('Auth check failed:', err);
       }
@@ -24,28 +33,46 @@ function App() {
     checkAuth();
   }, []);
 
+  // Fetch URLs from backend
+  const fetchUrls = async () => {
+    try {
+      const res = await fetch('/api/urls', {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch URLs');
+      const data: UrlItem[] = await res.json();
+      setUrls(data);
+    } catch (err) {
+      console.error(err);
+      setUrls([]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     try {
-      const response = await fetch("/api/urls", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+      const response = await fetch('/api/urls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           url,
-          customSlug: slug.trim()
-         }),
+          customSlug: slug.trim(),
+        }),
         credentials: 'include',
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         alert(errorData.error);
         return;
       }
-      
+
       const data = await response.json();
       setShortUrl(`${window.location.origin}/${data.slug}`);
+      setUrl('');
+      setSlug('');
+      fetchUrls(); // refresh URLs list after new URL added
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to shorten URL');
     }
@@ -58,7 +85,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginData),
-        credentials: 'include'
+        credentials: 'include',
       });
 
       if (!res.ok) {
@@ -69,6 +96,7 @@ function App() {
       setIsLoggedIn(true);
       setLoginData({ username: '', password: '' });
       setError('');
+      fetchUrls(); // fetch URLs after login success
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     }
@@ -78,10 +106,11 @@ function App() {
     try {
       await fetch('/api/logout', {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
       });
       setIsLoggedIn(false);
       setShortUrl('');
+      setUrls([]); // clear URLs on logout
     } catch (err) {
       console.error('Logout failed:', err);
     }
@@ -133,12 +162,7 @@ function App() {
               <div className="result-container">
                 <div className="success">Success! Here is your tiny URL:</div>
                 <div className="short-url-container">
-                  <a
-                    href={shortUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="short-url"
-                  >
+                  <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="short-url">
                     {shortUrl.replace(/^https?:\/\//, '')}
                   </a>
                   <button
@@ -153,6 +177,35 @@ function App() {
                 </div>
               </div>
             )}
+
+            {/* URLs Table */}
+            <div style={{ marginTop: '2rem' }}>
+              <h2>My URLs</h2>
+              {urls.length === 0 ? (
+                <p>No URLs yet.</p>
+              ) : (
+                <table className="url-table" border={1} cellPadding={5} cellSpacing={0}>
+                  <thead>
+                    <tr>
+                      <th>Slug</th>
+                      <th>URL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {urls.map(({ slug, url }) => (
+                      <tr key={slug}>
+                        <td>{slug}</td>
+                        <td>
+                          <a href={url} target="_blank" rel="noopener noreferrer">
+                            {url}
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </>
         ) : (
           <form onSubmit={handleLogin} className="login-form">
@@ -161,9 +214,7 @@ function App() {
               <input
                 type="text"
                 value={loginData.username}
-                onChange={(e) =>
-                  setLoginData({ ...loginData, username: e.target.value })
-                }
+                onChange={(e) => setLoginData({ ...loginData, username: e.target.value })}
                 placeholder="Username"
                 required
                 className="form-input"
@@ -173,9 +224,7 @@ function App() {
               <input
                 type="password"
                 value={loginData.password}
-                onChange={(e) =>
-                  setLoginData({ ...loginData, password: e.target.value })
-                }
+                onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                 placeholder="Password"
                 required
                 className="form-input"
