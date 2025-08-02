@@ -6,12 +6,14 @@ interface UrlPair {
   url: string;
 }
 
+// Create and configure Redis client
 const redis = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379'
 });
 
 redis.on('error', (err) => console.error('Redis Client Error', err));
 
+// Initialize Redis connection
 async function initializeRedis(): Promise<void> {
   try {
     await redis.connect();
@@ -24,8 +26,7 @@ async function initializeRedis(): Promise<void> {
 
 initializeRedis().catch(console.error);
 
-
-// Create slugh 
+// Create slug
 // 1. create a unique url with random num -> "https://testurl.com/my-page" + "5.123456789";
 // 2. generate a sha256 of it "8a94c2f2e3ab12b4a0f9a6d2d8e5c3bfe6737c994a1dce6b93b98b8f3f0f80cd"
 // 3. take the 1st chars 8a94c2f2
@@ -37,7 +38,7 @@ function generateSlug(url: string): string {
     .substring(0, 8);
 }
 
- // Stores URL in Redis and returns generated slug, or use a custom slug provided
+// Stores URL in Redis and returns generated slug, or use a custom slug provided
 export async function shortenUrl(url: string, customSlug?: string): Promise<string> {
   try {
     // Use custom slug if provided
@@ -51,7 +52,7 @@ export async function shortenUrl(url: string, customSlug?: string): Promise<stri
       return customSlug;
     }
 
-    // Generate slug
+    // Generate unique slug
     let slug: string;
     let attempts = 0;
     const maxAttempts = 5;
@@ -98,7 +99,7 @@ export async function getAllUrls(): Promise<UrlPair[]> {
   }
 }
 
-// remove shortened url
+// Remove shortened URL
 export async function deleteUrl(slug: string): Promise<void> {
   try {
     await redis.del(slug);
