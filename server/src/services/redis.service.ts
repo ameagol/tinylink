@@ -1,33 +1,6 @@
-import { createClient } from 'redis';
+import { redis } from '../lib/redis';
 import crypto from 'crypto';
-
-
-interface UrlData {
-  slug: string;
-  url: string;
-  hits: number;
-  owner: string;
-}
-
-// Create and configure Redis client
-const redis = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
-
-redis.on('error', (err) => console.error('Redis Client Error', err));
-
-// Initialize Redis connection
-async function initializeRedis(): Promise<void> {
-  try {
-    await redis.connect();
-    console.log('Connected to Redis successfully');
-  } catch (err) {
-    console.error('Failed to connect to Redis:', err);
-    throw err;
-  }
-}
-
-initializeRedis().catch(console.error);
+import { UrlData } from '../models/url-data';
 
 // Create slug
 // 1. create a unique url with random num -> "https://testurl.com/my-page" + "5.123456789";
@@ -41,7 +14,7 @@ function generateSlug(url: string): string {
     .substring(0, 8);
 }
 
-// Shorten URL and store JSON object
+// Shorten URL and store JSON object in Redis
 export async function shortenUrl(url: string, customSlug?: string, owner: string = 'user'): Promise<string> {
   let slug;
 
@@ -73,10 +46,9 @@ export async function shortenUrl(url: string, customSlug?: string, owner: string
   return slug!;
 }
 
-// Retrieve and increment hits
+// Retrieve and increment hits for a slug
 export async function getUrl(slug: string): Promise<string | null> {
   const data = await redis.get(slug);
-  console.log(data);
   if (!data) return null;
 
   const urlData: UrlData = JSON.parse(data);
@@ -85,25 +57,24 @@ export async function getUrl(slug: string): Promise<string | null> {
   return urlData.url;
 }
 
-// Get all slugs
-export async function getAllUrls(): Promise<UrlData[]> {
+// Get all URLs stored in Redis
+export async function getAllUrls(owner: string): Promise<UrlData[]> {
   const keys = await redis.keys('*');
   if (!keys.length) return [];
 
   const values = await redis.mGet(keys);
   return values
-    .map((json, i) => {
+    .map((json) => {
       try {
         return json ? JSON.parse(json) : null;
       } catch {
         return null;
       }
     })
-    .filter((d): d is UrlData => !!d);
+    .filter((d): d is UrlData => !!d && d.owner === owner);
 }
 
-// Delete slug
+// Delete a slug from Redis
 export async function deleteUrl(slug: string): Promise<void> {
   await redis.del(slug);
 }
-

@@ -1,19 +1,13 @@
 import express from 'express';
-import { shortenUrl, getUrl, getAllUrls } from '../services/redis.service';
-
-interface CustomSessionData {
-  user?: {
-    username: string;
-  };
-}
+import { shortenUrl, getAllUrls } from '../services/redis.service';
+import { UserSession } from '../models/user-session';
 
 const router = express.Router();
 
-// Shorten URL (protected)
 router.post('/', async (req, res) => {
-  const user = (req.session as CustomSessionData)?.user;
+  const user = (req.session as UserSession)?.user;
 
-  if (!user) {
+  if (!user || !user.username) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
@@ -29,21 +23,20 @@ router.post('/', async (req, res) => {
     const slug = await shortenUrl(url, customSlug, user.username);
     res.json({ slug, originalUrl: url });
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    res.status(500).json({ error: 'Failed to shorten URL' });
   }
 });
 
-// Get all URLs (protected)
 router.get('/', async (req, res) => {
-  const session = req.session as unknown as CustomSessionData;
-  if (!session.user) {
+  const user = (req.session as UserSession)?.user;
+
+  if (!user || !user.username) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const allUrls = await getAllUrls();
-    const userUrls = allUrls.filter((url) => url.owner === session.user?.username);
-    res.json(userUrls);
+    const urls = await getAllUrls(user.username);
+    res.json(urls);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch URLs' });
   }

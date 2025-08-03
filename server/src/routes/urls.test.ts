@@ -1,156 +1,125 @@
+import request from 'supertest';
+import express from 'express';
+import router from './urls';  // ajuste o caminho conforme seu projeto
+
+// Mock dos serviços
 jest.mock('../services/redis.service', () => ({
   shortenUrl: jest.fn(),
-  getUrl: jest.fn(),
   getAllUrls: jest.fn(),
 }));
 
-import request from 'supertest';
-import { app } from '../index';
-import * as redisService from '../services/redis.service';
+import { shortenUrl, getAllUrls } from '../services/redis.service';
 
 describe('URL Routes', () => {
-  const shortenUrlMock = redisService.shortenUrl as jest.Mock;
-  const getUrlMock = redisService.getUrl as jest.Mock;
-  const getAllUrlsMock = redisService.getAllUrls as jest.Mock;
+  let app: express.Express;
 
-  // Mock session data for authenticated requests
-  const authenticatedRequest = (url: string) => {
-    return request(app)
-      .get(url)
-      .set('Cookie', ['connect.sid=test-session-cookie']);
-  };
+  beforeAll(() => {
+    app = express();
+    app.use(express.json());
 
-  const authenticatedPostRequest = (url: string) => {
-    return request(app)
-      .post(url)
-      .set('Cookie', ['connect.sid=test-session-cookie']);
-  };
+    app.use((req, _res, next) => {
 
-  beforeEach(() => {
+      (req as any).session = {
+        user: {
+          username: 'testuser'
+        }
+      };
+      next();
+    });
+    app.use('/', router);
+  });
+
+  afterEach(() => {
     jest.clearAllMocks();
-    // Mock session middleware to simulate authenticated user
-    app.use((req: any, res: any, next: any) => {
-      req.session = { user: { username: 'testuser' } };
-      next();
+  });
+
+  describe('POST /', () => {
+    it('should return 401 if no user in session', async () => {
+
+      const appNoSession = express();
+      appNoSession.use(express.json());
+      appNoSession.use('/', router);
+
+      const res = await request(appNoSession)
+        .post('/')
+        .send({ url: 'http://example.com' });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Unauthorized' });
+    });
+
+    it('should return 400 if url is missing', async () => {
+      const res = await request(app)
+        .post('/')
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'URL is required' });
+    });
+
+    it('should return 400 if customSlug invalid', async () => {
+      const res = await request(app)
+        .post('/')
+        .send({ url: 'http://example.com', customSlug: 'invalid_slug!' });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Custom slug must be 1-8 letters or digits only' });
+    });
+
+    it('should call shortenUrl and return slug on success', async () => {
+      (shortenUrl as jest.Mock).mockResolvedValue('abc123');
+
+      const res = await request(app)
+        .post('/')
+        .send({ url: 'http://example.com', customSlug: 'abc123' });
+
+      expect(shortenUrl).toHaveBeenCalledWith('http://example.com', 'abc123', 'testuser');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ slug: 'abc123', originalUrl: 'http://example.com' });
+    });
+
+    it('should return 500 if shortenUrl throws', async () => {
+      (shortenUrl as jest.Mock).mockRejectedValue(new Error('Fail'));
+
+      const res = await request(app)
+        .post('/')
+        .send({ url: 'http://example.com' });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to shorten URL' });
     });
   });
 
-  it('should return 401 if not authenticated on POST /api/urls', async () => {
-    // Override the mock for this test to simulate no session
-    app.use((req: any, res: any, next: any) => {
-      req.session = {};
-      next();
+  describe('GET /', () => {
+    it('should return 401 if no user in session', async () => {
+      const appNoSession = express();
+      appNoSession.use(express.json());
+      appNoSession.use('/', router);
+
+      const res = await request(appNoSession).get('/');
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Unauthorized' });
     });
 
-    const res = await request(app)
-      .post('/api/urls')
-      .send({ url: 'https://mockurl.com' });
+    it('should call getAllUrls and return urls on success', async () => {
+      const fakeUrls = [{ slug: 'abc123', url: 'http://example.com', hits: 0, owner: 'testuser' }];
+      (getAllUrls as jest.Mock).mockResolvedValue(fakeUrls);
 
-    expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Unauthorized');
-  });
+      const res = await request(app).get('/');
 
-  it('should shorten a URL on POST /api/urls when authenticated', async () => {
-    shortenUrlMock.mockResolvedValue('slug321');
-  
-    const res = await authenticatedPostRequest('/api/urls')
-      .send({ url: 'https://mockurl.com' });
-  
-    expect(res.status).toBe(200);
-    expect(shortenUrlMock).toHaveBeenCalledWith('https://mockurl.com', undefined);
-    expect(res.body).toEqual({
-      slug: 'slug321',
-      originalUrl: 'https://mockurl.com'
-    });
-  });
-
-  it('should accept a custom slug and store it if available', async () => {
-    shortenUrlMock.mockResolvedValue('custom12');
-  
-    const res = await authenticatedPostRequest('/api/urls')
-      .send({ url: 'https://mockurl.com', customSlug: 'custom12' });
-  
-    expect(res.status).toBe(200);
-    expect(shortenUrlMock).toHaveBeenCalledWith('https://mockurl.com', 'custom12');
-    expect(res.body).toEqual({
-      slug: 'custom12',
-      originalUrl: 'https://mockurl.com'
-    });
-  });
-
-  it('should return 400 if custom slug has invalid format', async () => {
-    const res = await authenticatedPostRequest('/api/urls')
-      .send({ url: 'https://mockurl.com', customSlug: 'invalid@slug' });
-  
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Custom slug must be 1-8 letters or digits only');
-  });
-
-  it('should return 500 if custom slug already exists', async () => {
-    shortenUrlMock.mockImplementation(() => {
-      throw new Error('Custom slug already exists');
-    });
-  
-    const res = await authenticatedPostRequest('/api/urls')
-      .send({ url: 'https://mockurl.com', customSlug: 'dupSlug1' });
-  
-    expect(res.status).toBe(500);
-    expect(res.body.error).toBe('Custom slug already exists');
-  });
-
-  it('should return 400 if no URL is provided', async () => {
-    const res = await authenticatedPostRequest('/api/urls').send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('URL is required');
-  });
-
-  it('should redirect to original URL on GET /api/urls/:slug (public)', async () => {
-    getUrlMock.mockResolvedValue('https://mockurl.com');
-
-    const res = await request(app).get('/api/urls/slug321');
-
-    expect(res.status).toBe(301);
-    expect(res.headers.location).toBe('https://mockurl.com');
-  });
-
-  it('should return 404 if slug not found', async () => {
-    getUrlMock.mockResolvedValue(null);
-
-    const res = await request(app).get('/api/urls/nonexistent');
-
-    expect(res.status).toBe(404);
-  });
-
-  it('should return 401 if not authenticated on GET /api/urls', async () => {
-    // Override the mock for this test to simulate no session
-    app.use((req: any, res: any, next: any) => {
-      req.session = {};
-      next();
+      expect(getAllUrls).toHaveBeenCalledWith('testuser');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(fakeUrls);
     });
 
-    const res = await request(app).get('/api/urls');
-    expect(res.status).toBe(401);
-    expect(res.body.error).toBe('Unauthorized');
-  });
+    it('should return 500 if getAllUrls throws', async () => {
+      (getAllUrls as jest.Mock).mockRejectedValue(new Error('Fail'));
 
-  it('should return all URLs on GET /api/urls when authenticated', async () => {
-    getAllUrlsMock.mockResolvedValue([
-      { slug: 'slug321', originalUrl: 'https://mockurl.com' }
-    ]);
+      const res = await request(app).get('/');
 
-    const res = await authenticatedRequest('/api/urls');
-
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body[0]).toHaveProperty('slug', 'slug321');
-  });
-
-  it('should return 401 if failed to fetch URLs', async () => {
-    getAllUrlsMock.mockImplementation(() => {
-      throw new Error('Failed to fetch URLs');
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to fetch URLs' });
     });
-
-    const res = await authenticatedRequest('/api/urls');
-    expect(res.status).toBe(401);
   });
 });

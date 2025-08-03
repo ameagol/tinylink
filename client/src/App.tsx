@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 interface UrlItem {
-    slug: string;
-    url: string;
-    hits: number;
-    owner: string;
-  }
+  slug: string;
+  url: string;
+  hits: number;
+  owner: string;
+}
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -15,12 +15,12 @@ function App() {
   const [url, setUrl] = useState('');
   const [slug, setSlug] = useState('');
   const [shortUrl, setShortUrl] = useState('');
-  const [urls, setUrls] = useState<UrlItem[]>([]); // <-- new state
+  const [urls, setUrls] = useState<UrlItem[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/auth/status', {
+        const res = await fetch('/api/urls/auth/status', {
           credentials: 'include',
         });
         const data = await res.json();
@@ -35,7 +35,6 @@ function App() {
     checkAuth();
   }, []);
 
-  // Fetch URLs from backend
   const fetchUrls = async () => {
     try {
       const res = await fetch('/api/urls', {
@@ -44,6 +43,7 @@ function App() {
       if (!res.ok) throw new Error('Failed to fetch URLs');
       const data: UrlItem[] = await res.json();
       setUrls(data);
+      setShortUrl(''); // limpa link curto após atualizar lista
     } catch (err) {
       console.error(err);
       setUrls([]);
@@ -120,6 +120,11 @@ function App() {
 
   const isValidSlug = (value: string) => /^[a-zA-Z0-9]{0,8}$/.test(value);
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Copied to clipboard!');
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -167,13 +172,7 @@ function App() {
                   <a href={shortUrl} target="_blank" rel="noopener noreferrer" className="short-url">
                     {shortUrl.replace(/^https?:\/\//, '')}
                   </a>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(shortUrl);
-                      alert('Copied to clipboard!');
-                    }}
-                    className="copy-button"
-                  >
+                  <button onClick={() => copyToClipboard(shortUrl)} className="copy-button">
                     Copy
                   </button>
                 </div>
