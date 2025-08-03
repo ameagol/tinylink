@@ -158,7 +158,7 @@ function App() {
                   if (isValidSlug(e.target.value)) setSlug(e.target.value);
                 }}
                 placeholder="Custom slug (optional, max 8 chars)"
-                className="url-input"
+                className="slug-input"
               />
               <button type="submit" className="shorten-button" disabled={!url}>
                 Shorten URL
@@ -179,42 +179,76 @@ function App() {
               </div>
             )}
 
-            {/* URLs Table */}
-            <div style={{ marginTop: '2rem' }}>
-              <h2>My URLs</h2>
-              {urls.length === 0 ? (
-                <p>No URLs yet.</p>
-              ) : (
-                <table className="url-table" border={1} cellPadding={5} cellSpacing={0}>
-                  <thead>
-                    <tr>
-                      <th>Slug</th>
-                      <th>URL</th>
-                      <th>Hits</th>
-                      <th>Owner</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {urls.map((item) => (
-                      <tr key={item.slug}>
-                        <td>
-                          <a href={`${window.location.origin}/${item.slug}`} target="_blank" rel="noopener noreferrer">
-                            {window.location.origin}/{item.slug}
-                          </a>
-                        </td>
-                        <td>{item.url}</td>
-                        <td>{item.hits}</td>
-                        <td>{item.owner}</td>
+            {/* Container flex */}
+            <div className="content-container">
+              {/* URLs Table */}
+              <div className="table-container">
+                <h3>My URLs</h3>
+                {urls.length === 0 ? (
+                  <p>No URLs yet.</p>
+                ) : (
+                  <table className="url-table" border={1} cellPadding={5} cellSpacing={0}>
+                    <thead>
+                      <tr>
+                        <th>Slug</th>
+                        <th>URL</th>
+                        <th>Hits</th>
+                        <th>Owner</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                    </thead>
+                    <tbody>
+                      {urls.map((item) => (
+                        <tr key={item.slug}>
+                          <td>
+                            <a
+                              href={`${window.location.origin}/${item.slug}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {window.location.origin}/{item.slug}
+                            </a>
+                          </td>
+                          <td>{item.url.slice(0,30)}</td>
+                          <td>{item.hits}</td>
+                          <td>{item.owner}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Dashboard hits */}
+              <div className="dashboard-container">
+                <h3>Hits per Slug</h3>
+                {urls.length === 0 ? (
+                  <p>No data</p>
+                ) : (
+                  <div className="dashboard-bars">
+                    {urls.map(({ slug, hits }) => {
+                      const maxHits = Math.max(...urls.map(u => u.hits), 1);
+                      const barWidthPercent = (hits / maxHits) * 100;
+                      return (
+                        <div key={slug} className="bar-item">
+                          {/* <div className="bar-label">{slug}</div> */}
+                          <div
+                            className="bar"
+                            style={{ width: `${barWidthPercent}%` }}
+                            title={`${hits} hits`}
+                          >
+                            {hits}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </>
         ) : (
           <form onSubmit={handleLogin} className="login-form">
-            <h2>Login to Shorten URLs</h2>
+            <h2>Login</h2>
             <div className="form-group">
               <input
                 type="text"
