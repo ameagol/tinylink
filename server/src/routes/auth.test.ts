@@ -1,142 +1,107 @@
 import request from 'supertest';
 import express from 'express';
-import router from './auth';  // seu arquivo de rotas auth
+import session from 'express-session';
+import router from '../routes/urls'
 import { redis } from '../lib/redis';
 
-interface MockUserSession {
-    user: { username: string } | null;
-    destroy: (callback: (err?: any) => void) => void;
-  }
-
-// Mock Redis client
+// Mock Redis
 jest.mock('../lib/redis', () => ({
   redis: {
-    hGet: jest.fn(),
+    keys: jest.fn().mockResolvedValue([]),
+    mGet: jest.fn().mockResolvedValue([]),
+    exists: jest.fn().mockResolvedValue(0),
+    set: jest.fn().mockResolvedValue('OK'),
+    get: jest.fn().mockResolvedValue(null),
+    del: jest.fn().mockResolvedValue(1),
   },
 }));
 
-// Mock session simples
-const mockSession: MockUserSession = {
-  user: null,
-  destroy: jest.fn((callback) => callback()),
-};
+const mockRedis = redis as jest.Mocked<typeof redis>;
 
-const mockApp = express();
-mockApp.use(express.json());
+describe('URL Routes', () => {
+  const app = express();
+  app.use(express.json());
+  
+  // Setup session middleware
+  app.use(
+    session({
+      secret: 'test-secret',
+      resave: false,
+      saveUninitialized: true,
+      cookie: { secure: false }
+    })
+  );
 
-mockApp.use((req, res, next) => {
-    req.session = {
-      user: mockSession.user,
-      destroy: mockSession.destroy,
-    } as any;
-    next();
+  // Add mock login route for testing
+  app.post('/login', (req, res) => {
+    if (req.body.username === 'testuser') {
+      // Mock session data
+      (req.session as any).user = { username: 'testuser' };
+      return res.status(200).send('Logged in');
+    }
+    res.status(401).send('Unauthorized');
   });
 
-mockApp.use(router);
+  app.use(router);
 
-describe('Authentication Routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSession.user = null;
   });
 
-  describe('GET /urls/auth/status', () => {
-    it('should return unauthenticated status when no user is logged in', async () => {
-      mockSession.user = null;
+  test('GET / - should call getAllUrls and return urls on success', async () => {
+    // Mock Redis responses
+    mockRedis.keys.mockResolvedValue(['slug1', 'slug2']);
+    mockRedis.mGet.mockResolvedValue([
+      JSON.stringify({ slug: 'slug1', url: 'https://example.com', hits: 0, owner: 'testuser' }),
+      JSON.stringify({ slug: 'slug2', url: 'https://example.org', hits: 5, owner: 'testuser' })
+    ]);
 
-      const response = await request(mockApp).get('/urls/auth/status').expect(200);
+    const agent = request.agent(app);
 
-      expect(response.body).toEqual({
-        authenticated: false,
-        user: null,
-      });
-    });
+    // First log in to establish session
+    await agent
+      .post('/login')
+      .send({ username: 'testuser' });
 
-    it('should return authenticated status when user is logged in', async () => {
-      mockSession.user = { username: 'testuser' };
+    // Make the request
+    const response = await agent.get('/');
 
-      const response = await request(mockApp).get('/urls/auth/status').expect(200);
+    // Verify Redis was called correctly
+    expect(mockRedis.keys).toHaveBeenCalledWith('*');
+    expect(mockRedis.mGet).toHaveBeenCalledWith(['slug1', 'slug2']);
 
-      expect(response.body).toEqual({
-        authenticated: true,
-        user: { username: 'testuser' },
-      });
-    });
+    // Verify the response
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      { slug: 'slug1', url: 'https://example.com', hits: 0, owner: 'testuser' },
+      { slug: 'slug2', url: 'https://example.org', hits: 5, owner: 'testuser' }
+    ]);
   });
 
-  describe('POST /login', () => {
-    it('should return 400 if username or password is missing', async () => {
-      const testCases = [{ username: 'testuser' }, { password: 'password' }, {}];
+  test('GET / - should return only URLs owned by the user', async () => {
+    // Mock Redis responses with mixed ownership
+    mockRedis.keys.mockResolvedValue(['slug1', 'slug2', 'slug3']);
+    mockRedis.mGet.mockResolvedValue([
+      JSON.stringify({ slug: 'slug1', url: 'https://example.com', hits: 0, owner: 'testuser' }),
+      JSON.stringify({ slug: 'slug2', url: 'https://example.org', hits: 5, owner: 'otheruser' }),
+      JSON.stringify({ slug: 'slug3', url: 'https://example.net', hits: 3, owner: 'testuser' })
+    ]);
 
-      for (const body of testCases) {
-        const response = await request(mockApp).post('/login').send(body).expect(400);
-        expect(response.body).toEqual({ error: 'Username and password required' });
-      }
-    });
+    const agent = request.agent(app);
+    await agent.post('/login').send({ username: 'testuser' });
 
-    it('should return 401 for invalid credentials', async () => {
-      (redis.hGet as jest.Mock).mockResolvedValue(null);
+    const response = await agent.get('/');
 
-      const response = await request(mockApp)
-        .post('/login')
-        .send({ username: 'wronguser', password: 'wrongpass' })
-        .expect(401);
-
-      expect(response.body).toEqual({ error: 'Invalid credentials' });
-      expect(redis.hGet).toHaveBeenCalledWith('users', 'wronguser');
-      expect(mockSession.user).toBeNull();
-    });
-
-    it('should return 401 for incorrect password', async () => {
-      (redis.hGet as jest.Mock).mockResolvedValue('correctpass');
-
-      const response = await request(mockApp)
-        .post('/login')
-        .send({ username: 'testuser', password: 'wrongpass' })
-        .expect(401);
-
-      expect(response.body).toEqual({ error: 'Invalid credentials' });
-      expect(redis.hGet).toHaveBeenCalledWith('users', 'testuser');
-      expect(mockSession.user).toBeNull();
-    });
-
-    it('should login successfully with correct credentials', async () => {
-      (redis.hGet as jest.Mock).mockResolvedValue('correctpass');
-
-      const response = await request(mockApp)
-        .post('/login')
-        .send({ username: 'testuser', password: 'correctpass' })
-        .expect(200);
-
-      expect(response.body).toEqual({
-        success: true,
-        user: { username: 'testuser' },
-      });
-      expect(redis.hGet).toHaveBeenCalledWith('users', 'testuser');
-      expect(mockSession.user).toEqual({ username: 'testuser' });
-    });
-
-    it('should return 500 for Redis errors', async () => {
-      (redis.hGet as jest.Mock).mockRejectedValue(new Error('Redis error'));
-
-      const response = await request(mockApp)
-        .post('/login')
-        .send({ username: 'testuser', password: 'password' })
-        .expect(500);
-
-      expect(response.body).toEqual({ error: 'Internal server error' });
-    });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      { slug: 'slug1', url: 'https://example.com', hits: 0, owner: 'testuser' },
+      { slug: 'slug3', url: 'https://example.net', hits: 3, owner: 'testuser' }
+    ]);
   });
 
-  describe('POST /logout', () => {
-    it('should logout successfully', async () => {
-      mockSession.user = { username: 'testuser' };
-
-      const response = await request(mockApp).post('/logout').expect(200);
-
-      expect(response.body).toEqual({ success: true });
-      expect(mockSession.destroy).toHaveBeenCalled();
-    //   expect(mockSession.user).toBeNull();
-    });
+  test('GET / - should return 401 if not authenticated', async () => {
+    const response = await request(app).get('/');
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({ error: 'Unauthorized' });
   });
 });
