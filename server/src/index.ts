@@ -25,6 +25,13 @@ interface CustomSessionData {
   };
 }
 
+interface UrlData {
+  slug: string;
+  url: string;
+  hits: number;
+  owner: string;
+}
+
 const env: Environment = {
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   PORT: parseInt(process.env.PORT || '3000', 10),
@@ -123,7 +130,6 @@ app.post('/api/login', async (req, res) => {
 // Protect all other /api/urls routes
 app.use('/api/urls', requireAuth, urlRoutes);
 
-
 // Logout
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => {
@@ -144,25 +150,34 @@ app.get('/api/health', async (req, res) => {
 app.get('/:slug', async (req, res, next) => {
   const slug = req.params.slug;
 
-  console.log('slug passed', slug);
-
-  // If slug has dots, it's probably a file, so skip
+  // Skip if it looks like a file request
   if (slug.includes('.')) return next();
 
   try {
-    const url = await redis.get(slug);
-    console.log('/slug test', slug);
-
-    if (!url) {
+    const dataStr = await redis.get(slug);
+    if (!dataStr) {
       return res.status(404).send('Short URL not found');
     }
 
-    res.redirect(301, url);
+    const urlData: UrlData = JSON.parse(dataStr);
+
+    console.log('hits', urlData);
+    // Increment hit count
+    urlData.hits = (urlData.hits || 0) + 1;
+    console.log('hits+', urlData);
+
+    // Save updated data back to Redis
+    await redis.set(slug, JSON.stringify(urlData));
+
+    // Redirect to the original URL TEMPORARYLY, Otherwise won't update hits
+    res.redirect(302, urlData.url);
   } catch (err) {
     console.error('Redirect error:', err);
     res.status(500).send('Internal server error');
   }
 });
+
+
 
 // 4. Serve static frontend (only in production)
 if (env.NODE_ENV === 'production' && env.CLIENT_BUILD_PATH) {

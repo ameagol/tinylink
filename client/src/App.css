@@ -2,7 +2,7 @@
   padding: 20px;
   font-family: sans-serif;
   text-align: center;
-  max-width: 600px;
+  max-width: 80%;
   margin: 0 auto;
 }
 
@@ -223,7 +223,7 @@
 }
 
 /* Responsive on small screens */
-@media (max-width: 600px) {
+@media (max-width: 80%) {
   .url-table, .url-table thead, .url-table tbody, .url-table th, .url-table td, .url-table tr {
     display: block;
   }

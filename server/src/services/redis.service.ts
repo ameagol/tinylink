@@ -1,9 +1,12 @@
 import { createClient } from 'redis';
 import crypto from 'crypto';
 
-interface UrlPair {
+
+interface UrlData {
   slug: string;
   url: string;
+  hits: number;
+  owner: string;
 }
 
 // Create and configure Redis client
@@ -38,75 +41,69 @@ function generateSlug(url: string): string {
     .substring(0, 8);
 }
 
-// Stores URL in Redis and returns generated slug, or use a custom slug provided
-export async function shortenUrl(url: string, customSlug?: string): Promise<string> {
-  try {
-    // Use custom slug if provided
-    if (customSlug) {
-      if (!/^[a-zA-Z0-9]{1,8}$/.test(customSlug)) {
-        throw new Error('Custom slug must be 1-8 letters or digits only');
-      }
-      const exists = await redis.exists(customSlug);
-      if (exists) throw new Error('Custom slug already exists');
-      await redis.set(customSlug, url);
-      return customSlug;
-    }
+// Shorten URL and store JSON object
+export async function shortenUrl(url: string, customSlug?: string, owner: string = 'user'): Promise<string> {
+  let slug;
 
-    // Generate unique slug
-    let slug: string;
+  if (customSlug) {
+    slug = customSlug;
+    if (!/^[a-zA-Z0-9]{1,8}$/.test(customSlug)) {
+      throw new Error('Custom slug must be 1-8 alphanumeric chars');
+    }
+    if (await redis.exists(customSlug)) {
+      throw new Error('Custom slug already exists');
+    }
+  } else {
     let attempts = 0;
     const maxAttempts = 5;
-
     do {
-      if (attempts++ >= maxAttempts) {
-        throw new Error('Failed to generate unique slug after multiple attempts');
-      }
+      if (attempts++ >= maxAttempts) throw new Error('Slug generation failed');
       slug = generateSlug(url);
     } while (await redis.exists(slug));
-
-    await redis.set(slug, url);
-    return slug;
-  } catch (err) {
-    console.error('Error shortening URL:', err);
-    throw err;
   }
+
+  const urlData: UrlData = {
+    slug,
+    url,
+    hits: 0,
+    owner
+  };
+
+  await redis.set(slug!, JSON.stringify(urlData));
+  return slug!;
 }
 
-// Retrieves original URL by slug
+// Retrieve and increment hits
 export async function getUrl(slug: string): Promise<string | null> {
-  try {
-    return await redis.get(slug);
-  } catch (err) {
-    console.error('Error retrieving URL:', err);
-    throw err;
-  }
+  const data = await redis.get(slug);
+  console.log(data);
+  if (!data) return null;
+
+  const urlData: UrlData = JSON.parse(data);
+  urlData.hits += 1;
+  await redis.set(slug, JSON.stringify(urlData));
+  return urlData.url;
 }
 
-// Gets all shortened URLs from Redis
-export async function getAllUrls(): Promise<UrlPair[]> {
-  try {
-    const keys = await redis.keys('*');
-    if (!keys.length) return [];
+// Get all slugs
+export async function getAllUrls(): Promise<UrlData[]> {
+  const keys = await redis.keys('*');
+  if (!keys.length) return [];
 
-    const urls = await redis.mGet(keys);
-    return keys.map((slug, i) => ({
-      slug,
-      url: urls[i] || ''
-    })).filter(pair => pair.url);
-  } catch (err) {
-    console.error('Error retrieving all URLs:', err);
-    throw err;
-  }
+  const values = await redis.mGet(keys);
+  return values
+    .map((json, i) => {
+      try {
+        return json ? JSON.parse(json) : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter((d): d is UrlData => !!d);
 }
 
-// Remove shortened URL
+// Delete slug
 export async function deleteUrl(slug: string): Promise<void> {
-  try {
-    await redis.del(slug);
-  } catch (err) {
-    console.error('Error deleting URL:', err);
-    throw err;
-  }
+  await redis.del(slug);
 }
 
-export { redis };

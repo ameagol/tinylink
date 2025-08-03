@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 interface UrlItem {
-  slug: string;
-  url: string;
-}
+    slug: string;
+    url: string;
+    hits: number;
+    owner: string;
+  }
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -151,7 +153,7 @@ function App() {
                   if (isValidSlug(e.target.value)) setSlug(e.target.value);
                 }}
                 placeholder="Custom slug (optional, max 8 chars)"
-                className={`slug-input ${shortUrl ? 'visible' : ''}`}
+                className="url-input"
               />
               <button type="submit" className="shorten-button" disabled={!url}>
                 Shorten URL
@@ -189,17 +191,21 @@ function App() {
                     <tr>
                       <th>Slug</th>
                       <th>URL</th>
+                      <th>Hits</th>
+                      <th>Owner</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {urls.map(({ slug, url }) => (
-                      <tr key={slug}>
-                        <td>{slug}</td>
+                    {urls.map((item) => (
+                      <tr key={item.slug}>
                         <td>
-                          <a href={url} target="_blank" rel="noopener noreferrer">
-                            {url}
+                          <a href={`${window.location.origin}/${item.slug}`} target="_blank" rel="noopener noreferrer">
+                            {window.location.origin}/{item.slug}
                           </a>
                         </td>
+                        <td>{item.url}</td>
+                        <td>{item.hits}</td>
+                        <td>{item.owner}</td>
                       </tr>
                     ))}
                   </tbody>
