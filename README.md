@@ -1,9 +1,9 @@
 <img width="1040" height="501" alt="image" src="https://github.com/user-attachments/assets/a12f47ea-8a28-497d-8862-792dcfc41361" />
 
 
-# Tiny URl an Shortener and Customize your URL with Dashboard Metrics
+# Tiny My URl
 
-This is a web application that allows users to shorten URLs and track the number of hits for each shortened slug.
+This is a web application that allows users to shorten and customize slug URLs and track the number of hits for each shortened slug.
 
 ## Features
 
